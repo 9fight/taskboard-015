@@ -1,5 +1,17 @@
 const pool = require('../db');
 
+const VALID_STATUSES = new Set(['todo', 'inprogress', 'done']);
+const VALID_PRIORITIES = new Set(['low', 'medium', 'high']);
+
+const normalizeTaskInput = (body = {}) => {
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const description = typeof body.description === 'string' ? body.description.trim() : '';
+  const status = VALID_STATUSES.has(body.status) ? body.status : 'todo';
+  const priority = VALID_PRIORITIES.has(body.priority) ? body.priority : 'medium';
+
+  return { title, description, status, priority };
+};
+
 // GET /api/tasks?status=&priority=
 const getAllTasks = async (req, res) => {
   try {
@@ -42,13 +54,16 @@ const getTaskById = async (req, res) => {
 // POST /api/tasks
 const createTask = async (req, res) => {
   try {
-    const { title, description = '', status = 'todo', priority = 'medium' } = req.body;
-    if (!title) return res.status(400).json({ error: 'กรุณาระบุ title' });
+    const { title, description, status, priority } = normalizeTaskInput(req.body);
+    if (!title) return res.status(400).json({ error: 'กรุณาระบุชื่องาน' });
+    if (title.length > 200) {
+      return res.status(400).json({ error: 'ชื่องานต้องไม่เกิน 200 ตัวอักษร' });
+    }
 
     const { rows } = await pool.query(
       `INSERT INTO tasks (title, description, status, priority)
        VALUES ($1, $2, $3, $4) RETURNING *`,
-      [title.trim(), description.trim(), status, priority]
+      [title, description, status, priority]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -59,7 +74,12 @@ const createTask = async (req, res) => {
 // PUT /api/tasks/:id
 const updateTask = async (req, res) => {
   try {
-    const { title, description = '', status = 'todo', priority = 'medium' } = req.body;
+    const { title, description, status, priority } = normalizeTaskInput(req.body);
+    if (!title) return res.status(400).json({ error: 'กรุณาระบุชื่องาน' });
+    if (title.length > 200) {
+      return res.status(400).json({ error: 'ชื่องานต้องไม่เกิน 200 ตัวอักษร' });
+    }
+
     const { rows } = await pool.query(
       `UPDATE tasks
        SET title=$1, description=$2, status=$3, priority=$4, updated_at=NOW()
